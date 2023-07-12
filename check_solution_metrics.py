@@ -41,6 +41,9 @@ def check_solution(task, solution):
                 dy = np.minimum(y2, yy2) - np.maximum(y1, yy1) + 1
                 
                 intersect = (dx > 0) & (dy > 0)
+                if not ~intersect:
+                    print(task[i])
+                    print(f"({xx1}, {yy1}); ({xx2}, {yy2})\n({x1}, {y1}); ({x2}, {y2})\ndx: {dx}, dy: {dy}, intersect: {intersect}")
                 assert ~intersect
     return answers
 

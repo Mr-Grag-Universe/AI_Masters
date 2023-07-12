@@ -15,7 +15,7 @@ from fractions import gcd, Fraction
 class Rect():
     c1 : dict
     c2 : dict
-    r : Fraction
+    # r : Fraction
     count = 0
     r_id : int
 
@@ -41,7 +41,7 @@ class Rect():
         self.c2['x'] += point[0]
         self.c1['y'] += point[1]
         self.c2['y'] += point[1]
-        print("moved to ")
+        print(f"moved to c1: {self.c1}, c2: {self.c2}")
 
     def __eq__(self, other):
         return self.r == other.r
@@ -62,7 +62,14 @@ class Rect():
         return (self.c2['y'] - self.c1['y'], self.c2['x'] - self.c1['x']) # (h, w)
 
     def get_coord_list(self) -> list:
-        return [self.c1['x'], self.c1['y'], self.c2['x'], self.c2['y']]
+        return [self.c1['x'], self.c1['y'], self.c2['x']-1, self.c2['y']-1]
+
+    def setSize(self, size):
+        self.c2 = {'x' : (self.c1['x'] + size[0]), 'y' : (self.c1['y'] + size[1])}
+
+    def turn(self):
+        self.c2['x'], self.c2['y'] = self.c1['x'] - self.c1['y'] + self.c2['y'], self.c1['y'] - self.c1['x'] + self.c2['x']
+        self.r = 1/self.r
 
 
 class Column():
@@ -114,136 +121,123 @@ def get_cell(cols, rows, i, j, H, W):
     return c_h, c_w
 
 
+def chose_rect_size(rect : Rect, field, cols, rows) -> tuple:
+    H, W = len(field), len(field[0])
+    r = 1/rect.r
+    
+    # немного туповатая проверка, но смысл в целом понятен
+    for i in range(max(W, H), 1, -1):
+        f = Fraction.from_float(r).limit_denominator(i)
+        den, num = f.denominator, f.numerator
+        d = abs(num/den-r)
+        print(d)
+        if d < 0.1 and min(den, num) < min(H,W) and max(den, num) < max(H, W):
+            return (num, den)
+
+    return None
+    
+
 def append_to_field(rect : Rect, field, cols, rows, cells : dict):
+    size = chose_rect_size(rect, field, cols, rows)
+    assert size is not None
+    rect.setSize(size)
+    print(rect)
+
     h, w = rect.size()
     for i in range(len(cols)):
         for j in range(len(rows)):
             # если клетка cell не занята
             # проверка на случай, если у нас граница прямоугольника наложилась на 
-            if cols[i] < len(field) and rows[j] < len(field[0]) and not field[rows[j]][cols[i]]:
-                print("cols and rows : ", cols[i], rows[j])
+            if cols[i] < len(field[0]) and rows[j] < len(field) and not field[rows[j]][cols[i]]:
+                # print("cols and rows : ", cols[i], rows[j])
                 # если она достаточно высокая
-                c_h, c_w = get_cell(cols, rows, i, j, len(field), len(field[0]))
-                print(f"c_w: {c_w}, c_h: {c_h}")
 
-
-                if c_h >= h:
-                    if c_w >= w:
-                        # ячейка целиком поглощает наш прямоугольник
-                        print(f"Вставляем {rect} в ({cols[i]}, {rows[j]}) - полностью поместился")
-                        # можно соптимизировать бинарной вставкой
-                        if (cols[i] + w) not in cols and (cols[i] + w) < len(field):
-                            cols.append(cols[i] + w)
-                            cols.sort()
-                        if (rows[j] + h) not in rows and (rows[j] + h) < len(field[0]):
-                            rows.append(rows[j] + h)
-                            rows.sort()
-
-                        # забиваем поле True
-                        print(f"h: {h}, w: {w}")
-                        for ind in range(rows[j], rows[j]+h):
-                            print("ind: ", ind)
-                            field[ind][cols[i]:cols[i]+w] = [True for _ in range(cols[i],cols[i]+w)]
-                        
-                        rect.move((cols[i], rows[j]))
-                        return rect, False
-
-                    # если справа больше нет ячеек, чтобы нарастить ширину скипаем
-                    if i == len(cols)-1:
-                        print("Пробуем дальше")
-                        continue
-
-                    # начинаем сляпывать столбцы
-                    # row у нас одна и та же
-                    k = i + 1
-                    W = c_w
-                    while k < len(cols) and not field[cols[k]][rows[j]]:
-                        c_h, c_w = get_cell(cols, rows, k, j, len(field), len(field[0]))
-                        # может ли получиться так, что c_h < h - думаю нет
-                        W += c_w
-                        if W >= w:
-                            break
-                    # если не получилось собрать ширину
-                    if W < w:
-                        print("Пробуем дальше")
-                        continue
-
-                    # если ячейка нормального размера
-                    # всталяем прямоугольник
-                    print(f"Вставляем {rect} в ({cols[i]}, {rows[j]})")
-                    if (cols[i] + w) not in cols and (cols[i] + w) < len(field):
-                        cols.append(cols[i] + w)
-                        cols.sort()
-                    if (rows[j] + h) not in rows and (rows[j] + h) < len(field[0]):
-                        rows.append(rows[j] + h)
-                        rows.sort()
-
-                    # забиваем поле True
-                    for ind in range(rows[j], rows[j]+h):
-                        field[ind][cols[i]:cols[i]+w] = list(map(lambda x: True, range(cols[i],cols[i]+w)))
-                    rect.move((cols[i], rows[j]))
-                    return rect, False
-
-                else:
-                    # если недостаточно высокая, то попробуем объеденить с ячейками выше
-                    k = j + 1
-                    H = c_h
-                    while k < len(rows) and not field[cols[i]][rows[k]]:
-                        # c_h, c_w = cells[(cols[i], rows[k])]
-                        c_h, c_w = get_cell(cols, rows, i, k, len(field), len(field[0]))
-                        
-                        # может ли получиться так, что c_h < h - думаю нет
-                        H += c_h
-                        if H >= h:
-                            break
+                # если недостаточно высокая, то попробуем объеденить с ячейками выше
+                k = j
+                H = 0 # c_h
+                # print(f"k==j: {k}")
+                while k < len(rows) and not field[rows[k]][cols[i]]:
+                    # c_h, c_w = cells[(cols[i], rows[k])]
+                    # считаем размеры текущей клетки
+                    c_h, c_w = get_cell(cols, rows, i, k, len(field), len(field[0]))
+                    # print("H: ", H, "c_w: ", c_w, "c_h: ", c_h)
                     
-                    # если не получилось собрать высоту
-                    if H < h:
-                        continue
+                    # может ли получиться так, что c_h < h - думаю нет
+                    H += c_h
+                    if H >= h:
+                        break
+                    k += 1
+                
+                if k == len(rows):
+                    # print("edge!")
+                    H = len(field) - rows[j]
 
-                    # если ячейка нормальной высоты
-                    # собираем ширину
-                    l = i + 1
-                    W = c_w
-                    # проверяем все в выбранном диапазоне rows
-                    while l < len(cols) and not any(field[cols[l]][rows[t]] for t in range(j, k+1)):
-                        # c_h, c_w = cells[(cols[l], rows[j])]
-                        c_h, c_w = get_cell(cols, rows, l, j, len(field), len(field[0]))
+                # print("j: ", j, "k: ", k, "rows: ", rows, "cols: ", cols)
+                # print(f"H: {H}, h: {h}")
+                # если не получилось собрать высоту
+                if H < h:
+                    continue
 
-                        # может ли получиться так, что c_h < h - думаю нет
-                        W += c_w
-                        if W >= w:
-                            break
+                # если ячейка нормальной высоты
+                # собираем ширину
+                l = i + 1
+                W = c_w
+                # проверяем все в выбранном диапазоне rows
+                while l < len(cols) and not any(field[rows[t]][cols[l]] for t in range(j, min(k+1, len(rows)))):
+                    # c_h, c_w = cells[(cols[l], rows[j])]
+                    c_h, c_w = get_cell(cols, rows, l, j, len(field), len(field[0]))
 
-                    if W < w:
-                        continue
+                    # может ли получиться так, что c_h < h - думаю нет
+                    W += c_w
+                    if W >= w:
+                        break
+                    l += 1
 
-                    # собрали клетки нормального размера
-                    # можно на их место добавлять прямойгольник
-                    print(f"Вставляем {rect} в ({cols[i]}, {rows[j]})")
-                    if (cols[i] + w) not in cols and (cols[i] + w) < len(field):
-                        cols.append(cols[i] + w)
-                        cols.sort()
-                    if (rows[j] + h) not in rows and (rows[j] + h) < len(field[0]):
-                        rows.append(rows[j] + h)
-                        rows.sort()
+                if l == len(cols):
+                    W = len(field[0]) - cols[i]
+                # print(f"W: {W}, w: {w}")
+                if W < w:
+                    continue
 
-                    # забиваем поле True
-                    for ind in range(rows[j], rows[j]+h):
-                        field[ind][cols[i]:cols[i]+w] = list(map(lambda x: True, range(cols[i],cols[i]+w)))
+                # собрали клетки нормального размера
+                # можно на их место добавлять прямойгольник
+                print(f"Вставляем {rect} в ({cols[i]}, {rows[j]})")
+                if (cols[i] + w) not in cols and (cols[i] + w) < len(field[0]):
+                    cols.append(cols[i] + w)
+                    cols.sort()
+                if (rows[j] + h) not in rows and (rows[j] + h) < len(field):
+                    rows.append(rows[j] + h)
+                    rows.sort()
 
-                    rect.move((cols[i], rows[j]))
-                    return rect, False
+                # забиваем поле True
+                # print(rows[j], h, cols[i], w)
+                for ind in range(rows[j], rows[j]+h):
+                    # print(ind, end = '')
+                    field[ind][cols[i]:cols[i]+w] = list(map(lambda x: True, range(cols[i],cols[i]+w)))
+
+                rect.move((cols[i], rows[j]))
+                return rect, False
+
     return rect, True
 
+
+def printField(field):
+    for line in field:
+        if not (True in line):
+            print("  ###  ", end='')
+            continue
+        print(' '.join(list(map(lambda x: '  |' if not x else '* |', line))))
+        print('+'*(4*len(field[0])))
 
 
 def solution(task) -> np.array:
     data_frame = []
-    # for i in range(len(task[0])):
-    #     data_frame[0] += [f'X{i+1}min, Y{i+1}min, X{i+1}max, Y{i+1}max']
 
+    i = 0
     for case in task:
+        i += 1
+        if i == 88:
+            break
         print(case)
         H, W = int(case[0]), int(case[1])
         field = [[False for _ in range(W)] for _ in range(H)]
@@ -266,25 +260,28 @@ def solution(task) -> np.array:
         # r in rects - r копия из списка - не влияет на список
         for i in range(len(rects)):
             rects[i], err = append_to_field(rects[i], field, cols, rows, cells)
+            if err:
+                rects[i].turn()
+                rects[i], err = append_to_field(rects[i], field, cols, rows, cells)
             assert err == False
 
-            for line in field:
-                if not (True in line):
-                    print("  ###  ")
-                    print("+++++++")
-                    continue
-                print(' '.join(list(map(lambda x: '  |' if not x else '* |', line))))
-                print('+'*(4*W))
+            # printField(field)
         
         line = []
         print(case[2:])
         for r in case[2:]:
             for i in range(len(rects)):
-                if r == rects[i].r:
+                if abs(r - rects[i].r) < 0.09 or abs(r - 1/rects[i].r) < 0.09:
+                    print(rects[i], r)
                     line += rects[i].get_coord_list()
                     rects.pop(i)
                     break
 
+        if len(rects) != 0:
+            print("!!! there is some bad rect !!!")
+            for rect in rects:
+                print(rect)
+            raise "dfddf"
         data_frame.append(line)
 
     print(data_frame)
@@ -294,10 +291,13 @@ task = np.genfromtxt(sys.argv[1], delimiter=",", skip_header=1)
 print(task)
 
 
-sol = np.asarray(solution(task), dtype=str)
+sol = solution(task)
+# for line in sol:
+#     print(len(line))
+sol = np.asarray(sol, dtype=str)
 header = (', '.join([f'X{i+1}min, Y{i+1}min, X{i+1}max, Y{i+1}max' for i in range(len(sol[0]) // 4)])).split(', ')
 print(header)
 sol = np.insert(sol, 0, np.asarray(header, dtype=str), axis=0)
 print(sol)
-np.savetxt(sys.argv[2], sol, delimiter=",", fmt="%s")
+np.savetxt("solution.csv" '''sys.argv[2]''', sol, delimiter=",", fmt="%s")
 
