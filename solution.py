@@ -242,15 +242,75 @@ def printField(field):
         print('+'*(4*len(field[0])))
 
 
+# генерирует все возможные комбинации сторон, удовленворяющие ограничениям
+def generateSizes(r : float, H, W):
+    if r < 1:
+        r = 1/r
+
+    r += 0.0001
+    sizes = set()
+    for i in range(1, min(H, W)):
+        f = Fraction.from_float(r).limit_denominator(i)
+        den, num = f.denominator, f.numerator
+        d = abs(num/den-r)
+        if d <= 0.09 and num <= max(H, W) and den <= min(H, W):
+            sizes.add((num, den))
+    return sorted(list(sizes))
+
+
+def tryCombo(size_combo, H, W):
+    pass
+
+
+def findOpt(rs, sizes, size_combo, H, W):
+    if sizes == []:
+        positions, err = tryCombo(size_combo, H, W)
+        if err == False:
+            return positions, err
+        else:
+            return None, err
+
+    # можно добавить бин поиск
+    best_combo_positions = []
+    for size in sizes[0]:
+        size_combo.append(size)
+        positions, err = findOpt(rs[1:], sizes[1:], size_combo, H, W)
+        # нужно добавить сравниние площадей
+        if err == False:
+            best_combo_positions = positions
+        else:
+            break
+    
+    return best_combo_positions, False # ([], True)
+
+
+def solveCase(case) -> np.array:
+    H, W = int(case[0]), int(case[1])
+    field = [[False for _ in range(W)] for _ in range(H)]
+    cols = [0]
+    rows = [0]
+    rs = case[2:]
+
+    # генерируем все возможные размеры для rects
+    sizes = []
+    for r in rs:
+        sizes.append(generateSizes(r, H, W))
+
+    print(sizes)
+        
+    positions, err = findOpt(rs, sizes, cols, rows)
+    assert err == False
+    return positions
+
+
 def solution(task) -> np.array:
     data_frame = []
 
-    i = 0
     for case in task:
-        i += 1
-        if i == 88:
-            break
         print(case)
+        positions = solveCase(case)
+        continue
+
         H, W = int(case[0]), int(case[1])
         field = [[False for _ in range(W)] for _ in range(H)]
         columns = [Column(0, W)]
@@ -318,6 +378,7 @@ def solution(task) -> np.array:
     print(data_frame)
     return data_frame
 
+
 task = np.genfromtxt(sys.argv[1], delimiter=",", skip_header=1)
 print(task)
 
@@ -329,4 +390,6 @@ print(header)
 sol = np.insert(sol, 0, np.asarray(header, dtype=str), axis=0)
 print(sol)
 np.savetxt("solution.csv", sol, delimiter=",", fmt="%s")
+
+# рекурсивный поиск по всем размерам бин поиском
 
