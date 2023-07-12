@@ -132,18 +132,30 @@ def chose_rect_size(rect : Rect, field, cols, rows) -> tuple:
         d = abs(num/den-r)
         print(d)
         if d < 0.1 and min(den, num) < min(H,W) and max(den, num) < max(H, W):
-            return (num, den)
+            num, den = max(den, num), min(den, num)
+            C = cols + [len(field[0])]
+            R = rows + [len(field)]
+            k1 = max(C) // den
+            k2 = max(R) // num
+            k = max(1, min(k1, k2) // 2)
+            return (num * k, den * k)
 
     return None
-    
+
+
+def chose_min_rect_size(rect: Rect) -> tuple:
+    r = rect.r
+    for i in range(1, 100):
+        f = Fraction.from_float(r).limit_denominator(i)
+        den, num = f.denominator, f.numerator
+        d = abs(num/den-r)
+        if d < 0.1:
+            return (num, den)
+
 
 def append_to_field(rect : Rect, field, cols, rows, cells : dict):
-    size = chose_rect_size(rect, field, cols, rows)
-    assert size is not None
-    rect.setSize(size)
-    print(rect)
-
     h, w = rect.size()
+
     for i in range(len(cols)):
         for j in range(len(rows)):
             # если клетка cell не занята
@@ -253,19 +265,38 @@ def solution(task) -> np.array:
         for r in case[2:]:
             print(f"r: {r}")
             rects.append(Rect(r))
+            size = chose_min_rect_size(rects[-1])
+            rects[-1].setSize(size)
             print(rects[-1])
         
-        rects.sort(reverse=True)
+        rects.sort(reverse=False)
 
         # r in rects - r копия из списка - не влияет на список
         for i in range(len(rects)):
-            rects[i], err = append_to_field(rects[i], field, cols, rows, cells)
+            rect = rects[i]
+            # size = chose_rect_size(rect, field, cols, rows)
+            # assert size is not None
+            # rect.setSize(size)
+            print(rect)
+
+            # пытаемся добавить максимального размера
+            rect, err = append_to_field(rect, field, cols, rows, cells)
             if err:
-                rects[i].turn()
+                rect.turn()
+                rect, err = append_to_field(rect, field, cols, rows, cells)
+
+            # если не получилось - пробуем с минимальным размером
+            if err == False:
+                rects[i] = rect
+            else:
                 rects[i], err = append_to_field(rects[i], field, cols, rows, cells)
+                if err:
+                    rects[i].turn()
+                    rects[i], err = append_to_field(rects[i], field, cols, rows, cells)
+            
             assert err == False
 
-            # printField(field)
+            printField(field)
         
         line = []
         print(case[2:])
@@ -292,12 +323,10 @@ print(task)
 
 
 sol = solution(task)
-# for line in sol:
-#     print(len(line))
 sol = np.asarray(sol, dtype=str)
 header = (', '.join([f'X{i+1}min, Y{i+1}min, X{i+1}max, Y{i+1}max' for i in range(len(sol[0]) // 4)])).split(', ')
 print(header)
 sol = np.insert(sol, 0, np.asarray(header, dtype=str), axis=0)
 print(sol)
-np.savetxt("solution.csv" '''sys.argv[2]''', sol, delimiter=",", fmt="%s")
+np.savetxt("solution.csv", sol, delimiter=",", fmt="%s")
 
