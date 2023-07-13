@@ -1,16 +1,19 @@
 import numpy as np
-import scipy as sp
+# import scipy as sp
 import sys
-from fractions import gcd, Fraction
+from fractions import Fraction
+from math import gcd
 
 
-# для начала попробуем простенький жадный алгоритм
-# 1) прямоугольники делаем целосторонними
-# 2) проверяем, что суммарная площадь <= площади поля
-#   * если это не так - крутим как получится - пока не придумал
-#   * если всё норм продолжаем
-# 3) максимизируем размеры прямоугольника самого большого отношения r (так чтобы площади хватило под остальные)
-# 4) если места хватает - продолжаем. для оставшихся прямоугольников
+'''
+    новый план действий:
+    1) генерируем все возможные целочисленные размеры для r-ок
+    2) рекурсивно перебираем их комбинации, ища те, которые подходят
+    3) поиск оптимизируем бинарным поиском
+    4) при каждом погружении считаем метрику (свободную площадь)
+    5) можно заранее отсеивать проигрышные варианты слишком большой суммарной площадью
+'''
+
 
 class Rect():
     c1 : dict
@@ -34,14 +37,14 @@ class Rect():
         Rect.count += 1
         f = Fraction.from_float(self.r).limit_denominator(1000)
         self.c2 = {'x' : f.numerator, 'y' : f.denominator}
-        print(f"Created: {self.c1} - {self.c2}, r: {self.r}, id: {self.r_id}")
+        # print(f"Created: {self.c1} - {self.c2}, r: {self.r}, id: {self.r_id}")
 
     def move(self, point):
         self.c1['x'] += point[0]
         self.c2['x'] += point[0]
         self.c1['y'] += point[1]
         self.c2['y'] += point[1]
-        print(f"moved to c1: {self.c1}, c2: {self.c2}")
+        # print(f"moved to c1: {self.c1}, c2: {self.c2}")
 
     def __eq__(self, other):
         return self.r == other.r
@@ -70,6 +73,9 @@ class Rect():
     def turn(self):
         self.c2['x'], self.c2['y'] = self.c1['x'] - self.c1['y'] + self.c2['y'], self.c1['y'] - self.c1['x'] + self.c2['x']
         self.r = 1/self.r
+
+    def getSize(self):
+        return (self.c2['y'] - self.c1['y'], self.c2['x'] - self.c1['x'])
 
 
 class Column():
@@ -130,7 +136,6 @@ def chose_rect_size(rect : Rect, field, cols, rows) -> tuple:
         f = Fraction.from_float(r).limit_denominator(i)
         den, num = f.denominator, f.numerator
         d = abs(num/den-r)
-        print(d)
         if d < 0.1 and min(den, num) < min(H,W) and max(den, num) < max(H, W):
             num, den = max(den, num), min(den, num)
             C = cols + [len(field[0])]
@@ -153,8 +158,10 @@ def chose_min_rect_size(rect: Rect) -> tuple:
             return (num, den)
 
 
-def append_to_field(rect : Rect, field, cols, rows, cells : dict):
-    h, w = rect.size()
+def append_to_field(rect : Rect, field, cols, rows, cells : dict = {}):
+    h, w = rect.getSize()
+    if abs(rect.r - 0.909090909) < 0.0001:
+        pass # print(rect, "!!!!!!!")
 
     for i in range(len(cols)):
         for j in range(len(rows)):
@@ -213,7 +220,7 @@ def append_to_field(rect : Rect, field, cols, rows, cells : dict):
 
                 # собрали клетки нормального размера
                 # можно на их место добавлять прямойгольник
-                print(f"Вставляем {rect} в ({cols[i]}, {rows[j]})")
+                # print(f"Вставляем {rect} в ({cols[i]}, {rows[j]})")
                 if (cols[i] + w) not in cols and (cols[i] + w) < len(field[0]):
                     cols.append(cols[i] + w)
                     cols.sort()
@@ -228,9 +235,13 @@ def append_to_field(rect : Rect, field, cols, rows, cells : dict):
                     field[ind][cols[i]:cols[i]+w] = list(map(lambda x: True, range(cols[i],cols[i]+w)))
 
                 rect.move((cols[i], rows[j]))
+                if abs(rect.r - 0.909090909) < 0.0001:
+                    pass # print(rect, "!!!!!!!", f"H: {H}, h: {h}, W: {W}, w: {w}")
                 return rect, False
 
-    return rect, True
+    if abs(rect.r - 0.909090909) < 0.0001:
+        pass # print(rect, "!!!!!!!", f"error")
+    return None, True
 
 
 def printField(field):
@@ -249,44 +260,103 @@ def generateSizes(r : float, H, W):
 
     r += 0.0001
     sizes = set()
-    for i in range(1, min(H, W)):
+    for i in range(1, min(H, W), 2):
         f = Fraction.from_float(r).limit_denominator(i)
         den, num = f.denominator, f.numerator
         d = abs(num/den-r)
-        if d <= 0.09 and num <= max(H, W) and den <= min(H, W):
-            sizes.add((num, den))
-    return sorted(list(sizes))
+        if d < 0.09 and num <= max(H, W) and den <= min(H, W):
+            num, den = max(den, num), min(den, num)
+            k1 = i // den
+            k2 = i // num
+            k = max(1, min(k1, k2))
+            sizes.add((num * k, den * k))
+    return sorted(list(sizes), reverse=True)
 
 
-def tryCombo(size_combo, H, W):
-    pass
+def tryCombo(rs, size_combo, H, W):
+    field = [[False for _ in range(W)] for _ in range(H)]
+    rects = []
+    cols = [0]
+    rows = [0]
+    # print(len(rs), len(size_combo))
+    for i in range(len(size_combo)):
+        rect = Rect(rs[i])
+        rect.setSize(size_combo[i])
+        rects.append(rect)
+
+    for i in range(len(rects)):
+        err = True
+        rect = rects[i]
+        rr, err = append_to_field(rect, field, cols, rows)
+        if err:
+            rect.turn()
+            rr, err = append_to_field(rect, field, cols, rows)
+        rects[i] = rr
+        # print(rect)
+
+        if err == True:
+            return None, True
+
+    line = []
+    rr = rects.copy()
+    for r in rs:
+        for i in range(len(rr)):
+            if abs(r - rr[i].r) < 0.09 or abs(r - 1/rr[i].r) < 0.09:
+                line += rr[i].get_coord_list()
+                # print(rects[i])
+                rr.pop(i)
+                break
+
+    # if line[-12] + line[-11] + line[-8]+line[-7] == 0:
+    #     print(line)
+    #     print("rects:")
+    #     for rect in rects:
+    #         print(rect)
+    
+    # print("line:", line)
+    # если не все прямоугольники получилось распределить
+    if len(rr) != 0:
+        print("!!! there is some bad rect !!!")
+        for rect in rr:
+            print(rect)
+        raise "rect determination problem"
+    
+    return line, False
 
 
-def findOpt(rs, sizes, size_combo, H, W):
+def findOpt(rs, sizes, size_combo, H, W, S):
     if sizes == []:
-        positions, err = tryCombo(size_combo, H, W)
+        positions, err = tryCombo(rs, size_combo, H, W)
         if err == False:
             return positions, err
         else:
             return None, err
 
     # можно добавить бин поиск
-    best_combo_positions = []
+    best_combo_positions = None
     for size in sizes[0]:
+        # если мы берём слишком большой размер - даже не пробуем подставлять
+        if size[0]*size[1] > H*W-S:
+            continue
+
         size_combo.append(size)
-        positions, err = findOpt(rs[1:], sizes[1:], size_combo, H, W)
+        positions, err = findOpt(rs, sizes[1:], size_combo, H, W, S+size[0]*size[1])
+        size_combo.pop(-1)
         # нужно добавить сравниние площадей
         if err == False:
             best_combo_positions = positions
-        else:
-            break
+            return best_combo_positions, False
+        # else:
+        #     continue
     
-    return best_combo_positions, False # ([], True)
+    if best_combo_positions:
+        return best_combo_positions, False # ([], True)
+    else:
+        return None, True
 
 
 def solveCase(case) -> np.array:
     H, W = int(case[0]), int(case[1])
-    field = [[False for _ in range(W)] for _ in range(H)]
     cols = [0]
     rows = [0]
     rs = case[2:]
@@ -296,9 +366,17 @@ def solveCase(case) -> np.array:
     for r in rs:
         sizes.append(generateSizes(r, H, W))
 
-    print(sizes)
+    # минимальные остаточные суммы
+    # Ss = []
+    # for i in range(len(sizes)-1):
+    #     Ss = sum(np.asarray(sizes[i+1]).T[0])
+    # Ss += [0]
+    # print("sums: ", Ss)
+
+    # print(sizes)
         
-    positions, err = findOpt(rs, sizes, cols, rows)
+    size_combo = []
+    positions, err = findOpt(rs, sizes, size_combo, H, W, 0)
     assert err == False
     return positions
 
@@ -307,8 +385,10 @@ def solution(task) -> np.array:
     data_frame = []
 
     for case in task:
-        print(case)
+        # print(case)
         positions = solveCase(case)
+        data_frame.append(positions)
+        # break
         continue
 
         H, W = int(case[0]), int(case[1])
@@ -375,20 +455,22 @@ def solution(task) -> np.array:
             raise "dfddf"
         data_frame.append(line)
 
-    print(data_frame)
+    # print(data_frame)
     return data_frame
 
 
 task = np.genfromtxt(sys.argv[1], delimiter=",", skip_header=1)
-print(task)
+# print(task)
 
 
 sol = solution(task)
 sol = np.asarray(sol, dtype=str)
+# print(sol)
+
 header = (', '.join([f'X{i+1}min, Y{i+1}min, X{i+1}max, Y{i+1}max' for i in range(len(sol[0]) // 4)])).split(', ')
-print(header)
+# print(header)
 sol = np.insert(sol, 0, np.asarray(header, dtype=str), axis=0)
-print(sol)
+# print(sol)
 np.savetxt("solution.csv", sol, delimiter=",", fmt="%s")
 
 # рекурсивный поиск по всем размерам бин поиском

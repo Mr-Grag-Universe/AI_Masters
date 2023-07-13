@@ -26,6 +26,9 @@ def check_solution(task, solution):
             w = x2 - x1 + 1
             h = y2 - y1 + 1
             rr = np.maximum(w, h) / np.minimum(w, h)
+            if round(np.abs(rr - r), 4) > 0.1:
+                print(f"rr: {rr}, r: {r}")
+                print(solution[i])
             assert round(np.abs(rr - r), 4) <= 0.1
             s = w * h
             s_all += s
