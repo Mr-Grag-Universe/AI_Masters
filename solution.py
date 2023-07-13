@@ -3,15 +3,22 @@ import numpy as np
 import sys
 from fractions import Fraction
 from math import gcd
+from random import shuffle, seed
+from collections import defaultdict
 
 
 '''
     новый план действий:
     1) генерируем все возможные целочисленные размеры для r-ок
     2) рекурсивно перебираем их комбинации, ища те, которые подходят
-    3) поиск оптимизируем бинарным поиском
-    4) при каждом погружении считаем метрику (свободную площадь)
+    3) поиск оптимизируем бинарным поиском (мб потом реализую что-то такое. можно посмотреть, как байесовский оптимизатор работает)
+        * вместо этого ищем из последних i штук + меняем местами порядок приоритета (рандомно перетасовываем пару раз)
+    4) при каждом погружении считаем метрику (свободную/занятую площадь)
     5) можно заранее отсеивать проигрышные варианты слишком большой суммарной площадью
+    6) начинаем с максимальных размеров
+
+    Стратегия заполнения простая и описана вот тут : https://www.codeproject.com/Articles/210979/Fast-optimizing-rectangle-packing-algorithm-for-bu
+    По сути просто перебираем n-ое колечество кобинаций размеров, пытаясь скомпоновать их этим алгоритмом
 '''
 
 
@@ -306,12 +313,6 @@ def tryCombo(rs, size_combo, H, W):
                 # print(rects[i])
                 rr.pop(i)
                 break
-
-    # if line[-12] + line[-11] + line[-8]+line[-7] == 0:
-    #     print(line)
-    #     print("rects:")
-    #     for rect in rects:
-    #         print(rect)
     
     # print("line:", line)
     # если не все прямоугольники получилось распределить
@@ -324,35 +325,53 @@ def tryCombo(rs, size_combo, H, W):
     return line, False
 
 
-def findOpt(rs, sizes, size_combo, H, W, S):
+def findOpt(rs, sizes, size_combo, H, W, selfS):
     if sizes == []:
         positions, err = tryCombo(rs, size_combo, H, W)
         if err == False:
-            return positions, err
+            return positions, selfS, err
         else:
-            return None, err
+            return None, None, err
 
     # можно добавить бин поиск
     best_combo_positions = None
+    minS = 0
+    i = 0
     for size in sizes[0]:
         # если мы берём слишком большой размер - даже не пробуем подставлять
-        if size[0]*size[1] > H*W-S:
+        if size[0]*size[1] > H*W-selfS:
             continue
 
         size_combo.append(size)
-        positions, err = findOpt(rs, sizes[1:], size_combo, H, W, S+size[0]*size[1])
+        positions, S, err = findOpt(rs, sizes[1:], size_combo, H, W, selfS+size[0]*size[1])
         size_combo.pop(-1)
         # нужно добавить сравниние площадей
         if err == False:
-            best_combo_positions = positions
-            return best_combo_positions, False
+            i += 1
+            if S > minS:
+                best_combo_positions = positions
+                minS = S
+
+        if i > 2:
+            return best_combo_positions, minS, False
         # else:
         #     continue
     
     if best_combo_positions:
-        return best_combo_positions, False # ([], True)
+        return best_combo_positions, minS, False # ([], True)
     else:
-        return None, True
+        return None, None, True
+
+
+def unshuffle(pos, sh_r, order):
+    undone_pos = pos.copy()
+    for i in range(len(sh_r)):
+        r = sh_r[i]
+        ind = order[r][-1]
+        order[r].pop(-1)
+        undone_pos[ind*4 : (ind+1)*4] = pos[i*4 : (i+1)*4]
+
+    return undone_pos
 
 
 def solveCase(case) -> np.array:
@@ -365,20 +384,34 @@ def solveCase(case) -> np.array:
     sizes = []
     for r in rs:
         sizes.append(generateSizes(r, H, W))
+    
+    Smax = 0
+    position = None
 
-    # минимальные остаточные суммы
-    # Ss = []
-    # for i in range(len(sizes)-1):
-    #     Ss = sum(np.asarray(sizes[i+1]).T[0])
-    # Ss += [0]
-    # print("sums: ", Ss)
+    r_sizes = list(zip(rs, sizes))
+    
+    seed(42)
+    for _ in range(3):
+        order = defaultdict(list)
+        for i in range(len(r_sizes)):
+            order[r_sizes[i][0]].append(i)
+            
+        sh_r_sizes = r_sizes.copy()
+        shuffle(sh_r_sizes)
+        sh_r = [r for r, _ in sh_r_sizes]
+        sh_sizes = [sizes for _, sizes in sh_r_sizes]
+        # print(sh_r, sh_sizes)
 
-    # print(sizes)
-        
-    size_combo = []
-    positions, err = findOpt(rs, sizes, size_combo, H, W, 0)
-    assert err == False
-    return positions
+        size_combo = []
+        pos, S, err = findOpt(sh_r, sh_sizes, size_combo, H, W, 0)
+
+        if S > Smax:
+            position = unshuffle(pos, sh_r, order)
+            Smax = S
+
+        assert err == False
+
+    return position
 
 
 def solution(task) -> np.array:
@@ -459,19 +492,20 @@ def solution(task) -> np.array:
     return data_frame
 
 
-task = np.genfromtxt(sys.argv[1], delimiter=",", skip_header=1)
-# print(task)
+def main():
+    task = np.genfromtxt(sys.argv[1], delimiter=",", skip_header=1)
+    # print(task)
 
 
-sol = solution(task)
-sol = np.asarray(sol, dtype=str)
-# print(sol)
+    sol = solution(task)
+    sol = np.asarray(sol, dtype=str)
+    # print(sol)
 
-header = (', '.join([f'X{i+1}min, Y{i+1}min, X{i+1}max, Y{i+1}max' for i in range(len(sol[0]) // 4)])).split(', ')
-# print(header)
-sol = np.insert(sol, 0, np.asarray(header, dtype=str), axis=0)
-# print(sol)
-np.savetxt("solution.csv", sol, delimiter=",", fmt="%s")
+    header = (', '.join([f'X{i+1}min, Y{i+1}min, X{i+1}max, Y{i+1}max' for i in range(len(sol[0]) // 4)])).split(', ')
+    # print(header)
+    sol = np.insert(sol, 0, np.asarray(header, dtype=str), axis=0)
+    # print(sol)
+    np.savetxt("solution.csv", sol, delimiter=",", fmt="%s")
 
-# рекурсивный поиск по всем размерам бин поиском
 
+main()
