@@ -15,13 +15,14 @@ def benchmark(func):
 
     def wrapper(*args, **kwargs):
         start = time.time()
-        func(*args, **kwargs)
+        x = func(*args, **kwargs)
         end = time.time()
         delta_t = (end - start)
         m = int(delta_t)//60
         s = int(delta_t)%60
         ms = int(1000*(delta_t-m*60-s))
         print(f"[*] Время выполнения: {m}:{s}:{ms}")
+        return x
     return wrapper
 
 def visualize_placements(position, max_rectangles, container, order_res):
@@ -520,74 +521,134 @@ def append_to_field(rect : Rect, field, cols, rows, gravity=0):
     '''
         ищет место для вставки в поле и если находит - вставляет
     '''
-    for i in range(gravity%4):
-        field, cols, rows, _ = turn_field(field, cols, rows, rect, "CW")
+    # for i in range(gravity%4):
+    #     field, cols, rows, _ = turn_field(field, cols, rows, rect, "CW")
 
     H_, W_ = len(field), len(field[0])
     h, w = rect.getSize()
+    # print(cols, rows)
 
     # print(cols, rows)
-    for i in range(len(cols)-1):
-        for j in range(len(rows)-1):
-            # если клетка cell не занята
-            # проверка на случай, если у нас граница прямоугольника наложилась на 
-            if cols[i] < W_ and rows[j] < H_ and not field[rows[j]][cols[i]]: # empty_area(field, (rows[j], cols[i]), (rows[j+1]-1, cols[i+1]-1)): # (field[rows[j]][cols[i]] or field[rows[j+1]-1][cols[i]] or field[rows[j]][cols[i+1]-1] or field[rows[j+1]-1][cols[i+1]-1]):
-                # если недостаточно высокая, то попробуем объеденить с ячейками выше
-                k = j
-                H = 0
-                while k < len(rows)-1 and not field[rows[k]][cols[i]]:
-                    # считаем размеры текущей клетки
-                    c_h, c_w = get_cell(cols, rows, i, k, H_, W_)
-                    # может ли получиться так, что c_h < h - думаю нет
-                    H += c_h
-                    if H >= h:
-                        break
-                    k += 1
-                
-                if k == len(rows)-1:
-                    H = H_ - rows[j]
+    if gravity%4 == 0:
+        for i in range(len(cols)-1):
+            for j in range(len(rows)-1):
+                # если клетка cell не занята
+                # проверка на случай, если у нас граница прямоугольника наложилась на 
+                if cols[i] < W_ and rows[j] < H_ and not (field[rows[j+1]-1][cols[i+1]-1] or field[rows[j]][cols[i]]): # empty_area(field, (rows[j], cols[i]), (rows[j+1]-1, cols[i+1]-1)): # (field[rows[j]][cols[i]] or field[rows[j+1]-1][cols[i]] or field[rows[j]][cols[i+1]-1] or field[rows[j+1]-1][cols[i+1]-1]):
+                    # если недостаточно высокая, то попробуем объеденить с ячейками выше
+                    k = j
+                    H = 0
+                    while k < len(rows)-1 and not field[rows[k]][cols[i]]:
+                        # считаем размеры текущей клетки
+                        c_h, c_w = get_cell(cols, rows, i, k, H_, W_)
+                        # может ли получиться так, что c_h < h - думаю нет
+                        H += c_h
+                        if H >= h:
+                            break
+                        k += 1
+                    
+                    if k == len(rows)-1:
+                        H = H_ - rows[j]
 
-                # если не получилось собрать высоту
-                if H < h:
-                    continue
+                    # если не получилось собрать высоту
+                    if H < h:
+                        continue
 
-                # если ячейка нормальной высоты
-                # собираем ширину
-                l = i
-                W = 0
-                # проверяем все в выбранном диапазоне rows
-                while l < len(cols)-1 and not any(field[rows[t]][cols[l]] for t in range(j, min(k+1, len(rows)-1))):
-                    c_h, c_w = get_cell(cols, rows, l, j, H_, W_)
-                    W += c_w
-                    if W >= w:
-                        break
-                    l += 1
+                    # если ячейка нормальной высоты
+                    # собираем ширину
+                    l = i
+                    W = 0
+                    # проверяем все в выбранном диапазоне rows
+                    while l < len(cols)-1 and not any(field[rows[t]][cols[l]] for t in range(j, min(k+1, len(rows)-1))):
+                        c_h, c_w = get_cell(cols, rows, l, j, H_, W_)
+                        W += c_w
+                        if W >= w:
+                            break
+                        l += 1
 
-                if l == len(cols)-1:
-                    W = W_ - cols[i]
-                if W < w:
-                    continue
+                    if l == len(cols)-1:
+                        W = W_ - cols[i]
+                    if W < w:
+                        continue
 
-                # собрали клетки нормального размера
-                # # можно на их место добавлять прямойгольник
-                if (cols[i] + w) not in cols and (cols[i] + w) < W_:
-                    bisect.insort(cols, cols[i] + w)
-                if (rows[j] + h) not in rows and (rows[j] + h) < H_:
-                    bisect.insort(rows, rows[j] + h)
+                    # собрали клетки нормального размера
+                    # # можно на их место добавлять прямойгольник
+                    if (cols[i] + w) not in cols and (cols[i] + w) < W_:
+                        bisect.insort(cols, cols[i] + w)
+                    if (rows[j] + h) not in rows and (rows[j] + h) < H_:
+                        bisect.insort(rows, rows[j] + h)
 
 
-                # забиваем поле True
-                for ind in range(rows[j], rows[j]+h):
-                    field[ind][cols[i]:cols[i]+w] = list(map(lambda x: True, range(cols[i],cols[i]+w)))
+                    # забиваем поле True
+                    for ind in range(rows[j], rows[j]+h):
+                        field[ind][cols[i]:cols[i]+w] = list(map(lambda x: True, range(cols[i],cols[i]+w)))
 
-                rect.move((cols[i], rows[j]))
+                    rect.move((cols[i], rows[j]))
 
-                if gravity % 4:
-                    for i in range(4-(gravity % 4)):
-                        field, cols, rows, rect = turn_field(field, cols, rows, rect, "CW")
-                return rect, cols, rows, field, False
+                    # if gravity % 4:
+                    #     for i in range(4-(gravity % 4)):
+                    #         field, cols, rows, rect = turn_field(field, cols, rows, rect, "CW")
+                    return rect, False
+    else:
+        for i in range(len(cols)-2, -1, -1):
+            for j in range(len(rows)-2, -1, -1):
+                if cols[i] >= 0 and rows[j] >= 0 and not (field[rows[j+1]-1][cols[i+1]-1] or field[rows[j]][cols[i]]):
+                    k = j
+                    H = 0
+                    while k >= 0 and not (field[rows[k+1]-1][cols[i+1]-1] or field[rows[j]][cols[i]]):
+                        # считаем размеры текущей клетки
+                        c_h, c_w = get_cell(cols, rows, i, k, H_, W_)
+                        # может ли получиться так, что c_h < h - думаю нет
+                        H += c_h
+                        if H >= h:
+                            break
+                        k -= 1
+                    
+                    if k == -1:
+                        H = rows[j+1]-1
+                    if H < h:
+                        continue
 
-    return None, None, None, field, True
+                    l = i
+                    W = 0
+                    while l >= 0 and not any((field[rows[t+1]-1][cols[l+1]-1] or field[rows[t]][cols[l]]) for t in range(max(0, k), j+1)):
+                        # for t in range(max(0, k), j+1):
+                            # print(f"checked points: ({cols[l]}, {rows[t]}), ({cols[l+1]-1}, {rows[t+1]-1})")
+                        c_h, c_w = get_cell(cols, rows, l, j, H_, W_)
+                        W += c_w
+                        if W >= w:
+                            break
+                        l -= 1
+
+                    if l == -1:
+                        W = cols[i+1]-1
+                    if W < w:
+                        continue
+                    # print("H, W: ", H, W)
+
+                    # print("chosen: ", cols[i], rows[j])
+                    if (cols[i+1] - w) not in cols and (cols[i+1] - w) > 0:
+                        bisect.insort(cols, cols[i+1] - w)
+                        i += 1
+                    if (rows[j+1] - h) not in rows and (rows[j+1] - h) > 0:
+                        bisect.insort(rows, rows[j+1] - h)
+                        j += 1
+                    # print("insert into: ", cols[i+1], rows[j+1])
+
+                    # print(f"draw: ({cols[i+1]-w}, {rows[j+1]-h}) : ({cols[i+1]}, {rows[j+1]})")
+                    # print(rows[j+1]-h, rows[j+1])
+                    for ind in range(rows[j+1]-h, rows[j+1]):
+                        field[ind][cols[i+1]-w:cols[i+1]] = list(map(lambda x: True, range(cols[i+1]-w,cols[i+1])))
+                    # print("finifed")
+                    rect.move((cols[i+1]-w, rows[j+1]-h))
+                    # print(rect)
+
+                    # if gravity % 4:
+                    #     for i in range(4-(gravity % 4)):
+                    #         field, cols, rows, rect = turn_field(field, cols, rows, rect, "CW")
+                    return rect, False
+
+    return None, True
 
 def printField(field):
     for line in field:
@@ -624,6 +685,7 @@ def generateSizes(r : float, H, W):
 
 
 def tryCombo(rs, size_combo, H, W, algo="classic"):
+    # print("new_try")
     field = [[False for _ in range(W)] for _ in range(H)]
     rects = []
     cols = [0, W]
@@ -640,18 +702,18 @@ def tryCombo(rs, size_combo, H, W, algo="classic"):
         for i in range(len(rects)):
             err = True
             rect = rects[i]
-            rr, c, r, f, err = append_to_field(rect, field.copy(), cols.copy(), rows.copy(), gravity=(i%2)*2)
+            rr, err = append_to_field(rect, field, cols, rows, gravity=(i%2)*2)
             if err:
                 rect.turn()
-                rr, c, r, f, err = append_to_field(rect, field, cols, rows, gravity=(i%2)*2)
+                rr, err = append_to_field(rect, field, cols, rows, gravity=(i%2)*2)
 
             if err == True:
                 return None, True
             
             rects[i] = rr
-            field = f
-            cols = c
-            rows = r
+
+            # if i >= 3:
+                # visualize_placements(rr.get_coord_list(), Rect(1.), (W, H), [1])
 
     elif algo == "burke":
         rects, err = burke(rects, H, W)
@@ -673,7 +735,7 @@ def tryCombo(rs, size_combo, H, W, algo="classic"):
                 rr.pop(i)
                 break
 
-    # visualize_placements(line, Rect(1.), (W, H), range(1, 4))
+    # visualize_placements(line, Rect(1.), (W, H), range(len(line) // 4))
 
     # print("line:", line)
     # если не все прямоугольники получилось распределить
@@ -748,7 +810,7 @@ def unshuffle(pos, sh_r, order):
 
     return undone_pos
 
-
+@benchmark
 def solveCase(case) -> np.array:
     H, W = int(case[0]), int(case[1])
     cols = [0]
@@ -784,10 +846,11 @@ def solveCase(case) -> np.array:
             Smax = S
 
         assert err == False
+    # visualize_placements(position, Rect(1.), (W, H), range(len(position) // 4))
 
     return position
 
-
+@benchmark
 def solution(task) -> np.array:
     data_frame = []
 
@@ -798,9 +861,8 @@ def solution(task) -> np.array:
     return data_frame
 
 def main():
-    task = np.genfromtxt(sys.argv[1] , delimiter=",", skip_header=1)[:2,:]
+    task = np.genfromtxt(sys.argv[1] , delimiter=",", skip_header=1)[:10,:]
 
-    # @benchmark
     sol = solution(task)
 
     sol = np.asarray(sol, dtype=str)

@@ -504,9 +504,10 @@ def tryCombo(rs, size_combo, H, W, algo="classic"):
         rect.setSize((max(size_combo[i]), min(size_combo[i])))
         rects.append(rect)
 
-    rects.sort(key=(lambda x: x.height()), reverse=True)
 
     if algo == "classic":
+        rects.sort(key=(lambda x: x.height()), reverse=True)
+        
         for i in range(len(rects)):
             err = True
             rect = rects[i]
@@ -613,7 +614,7 @@ def unshuffle(pos, sh_r, order):
 
     return undone_pos
 
-
+@benchmark
 def solveCase(case) -> np.array:
     H, W = int(case[0]), int(case[1])
     cols = [0]
@@ -731,7 +732,7 @@ def solution(task) -> np.array:
 
 def main():
     '''sys.argv[1]'''
-    task = np.genfromtxt(sys.argv[1] , delimiter=",", skip_header=1)[:2,:]
+    task = np.genfromtxt(sys.argv[1] , delimiter=",", skip_header=1)[:10, :]
     # print(task)
 
 
