@@ -18,6 +18,8 @@ def check_solution(task, solution):
             assert 0 <= x1
             assert x2 <= (W - 1)
             assert 0 <= y1
+            if y2 > (H - 1):
+                print(f"H: {H}, y2: {y2}")
             assert y2 <= (H - 1)            
             assert int(x1) == x1
             assert int(x2) == x2
@@ -29,6 +31,7 @@ def check_solution(task, solution):
             if round(np.abs(rr - r), 4) > 0.1:
                 print(f"rr: {rr}, r: {r}")
                 print(solution[i])
+                print("task: ", task[i])
             assert round(np.abs(rr - r), 4) <= 0.1
             s = w * h
             s_all += s
@@ -50,7 +53,7 @@ def check_solution(task, solution):
                 assert ~intersect
     return answers
 
-task = np.genfromtxt(sys.argv[1], delimiter=",", skip_header=1)
+task = np.genfromtxt(sys.argv[1], delimiter=",", skip_header=1)[:2,:]
 solution = np.genfromtxt(sys.argv[2], delimiter=",", skip_header=1)
 
 a = check_solution(task, solution)

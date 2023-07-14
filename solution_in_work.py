@@ -5,9 +5,10 @@ from fractions import Fraction
 from math import gcd
 from random import shuffle, seed, choice
 from collections import defaultdict
-# import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
 import time
 import copy
+import bisect 
 
 def benchmark(func):
     import time
@@ -23,39 +24,48 @@ def benchmark(func):
         print(f"[*] Время выполнения: {m}:{s}:{ms}")
     return wrapper
 
-# def visualize_placements(all_placements, max_rectangles, container, order_res):
-#     # Создаем график
-#     fig, ax = plt.subplots()
+def visualize_placements(position, max_rectangles, container, order_res):
+    def __convert(position):
+        placements = []
+        for i in range(0, len(position)//4):
+            ind = 4*(i+1)
+            placements.append([position[ind-4:ind-2], position[ind-2:ind]])
+        return placements
 
-#     # Закрашиваем свободное пространство на листе черным цветом
-#     ax.add_patch(plt.Rectangle((0, 0), container[0], container[1], facecolor='black'))
+    all_placements = [__convert(position)]
 
-#     # Определяем список цветов для прямоугольников
-#     colors = ['red', 'green', 'blue', 'orange', 'purple', 'cyan', 'magenta']
+    # Создаем график
+    fig, ax = plt.subplots()
 
-#     # Проходимся по всем расстановкам прямоугольников
-#     ind = 0
-#     for placements in all_placements:
-#         # Проходимся по каждому прямоугольнику в расстановке
-#         for i, placement in enumerate(placements):
-#             rect_coords = placement[0] + placement[1]  # Координаты прямоугольника
-#             # print(rect_coords)
-#             color = colors[i % len(colors)]  # Цвет прямоугольника
-#             rectangle = plt.Rectangle(rect_coords[:2], rect_coords[2]-rect_coords[0]+1, rect_coords[3]-rect_coords[1]+1, facecolor=color, alpha=0.5)
-#             rx, ry = rectangle.get_xy()
-#             cx = rx + rectangle.get_width()/2.0
-#             cy = ry + rectangle.get_height()/2.0
-#             # Добавляем прямоугольник на график
-#             ind += 1
-#             ax.add_patch(rectangle)
-#             ax.annotate(str(ind), (cx, cy), color='black', weight='bold', fontsize=10, ha='center', va='center')
+    # Закрашиваем свободное пространство на листе черным цветом
+    ax.add_patch(plt.Rectangle((0, 0), container[0], container[1], facecolor='black'))
 
-#     # Устанавливаем пределы графика и оси
-#     ax.set_xlim(0, container[0])
-#     ax.set_ylim(0, container[1])
+    # Определяем список цветов для прямоугольников
+    colors = ['red', 'green', 'blue', 'orange', 'purple', 'cyan', 'magenta']
 
-#     # Отображаем график
-#     plt.show()
+    # Проходимся по всем расстановкам прямоугольников
+    ind = 0
+    for placements in all_placements:
+        # Проходимся по каждому прямоугольнику в расстановке
+        for i, placement in enumerate(placements):
+            rect_coords = placement[0] + placement[1]  # Координаты прямоугольника
+            # print(rect_coords)
+            color = colors[i % len(colors)]  # Цвет прямоугольника
+            rectangle = plt.Rectangle(rect_coords[:2], rect_coords[2]-rect_coords[0]+1, rect_coords[3]-rect_coords[1]+1, facecolor=color, alpha=0.5)
+            rx, ry = rectangle.get_xy()
+            cx = rx + rectangle.get_width()/2.0
+            cy = ry + rectangle.get_height()/2.0
+            # Добавляем прямоугольник на график
+            ind += 1
+            ax.add_patch(rectangle)
+            ax.annotate(str(ind), (cx, cy), color='black', weight='bold', fontsize=10, ha='center', va='center')
+
+    # Устанавливаем пределы графика и оси
+    ax.set_xlim(0, container[0])
+    ax.set_ylim(0, container[1])
+
+    # Отображаем график
+    plt.show()
 
 
 '''
@@ -80,6 +90,8 @@ def benchmark(func):
 
     можно попробовать вариации алгоритма на тему не сляпывать фигуры, а наоборот разносить
     или ставить так, чтобы оставлять как можно больше свободного места
+
+    сейчас пробуем сделать с разными центрами гравитации
 '''
 
 
@@ -136,7 +148,15 @@ class Rect():
         return [self.c1['x'], self.c1['y'], self.c2['x']-1, self.c2['y']-1]
 
     def setSize(self, size):
-        self.c2 = {'x' : (self.c1['x'] + size[0]), 'y' : (self.c1['y'] + size[1])}
+        h, w = size
+        self.c2 = {'x' : (self.c1['x'] + w), 'y' : (self.c1['y'] + h)}
+
+    def setCoords(self, coords):
+        h, w = self.getSize()
+        self.c1['x'] = coords[0]
+        self.c1['y'] = coords[1]
+        self.c2['x'] = coords[0]+w
+        self.c2['y'] = coords[1]+h
 
     def turn(self):
         self.c2['x'], self.c2['y'] = self.c1['x'] - self.c1['y'] + self.c2['y'], self.c1['y'] - self.c1['x'] + self.c2['x']
@@ -228,6 +248,7 @@ class Level():
 
 
 def get_cell(cols, rows, i, j, H, W):
+    # print(cols, rows, i, j, H, W)
     c_h, c_w = (0, 0) # max(, ) # cells[(cols[i], rows[j])]
     if i == len(cols)-1:
         c_w = W - cols[i]
@@ -387,8 +408,6 @@ def FCNR(rects : list, H, W) -> list :
     else:
         return None, True
 
-
-def append_to_field(rect : Rect, field, cols, rows):
     '''
         ищет место для вставки в поле и если находит - вставляет
     '''
@@ -403,7 +422,8 @@ def append_to_field(rect : Rect, field, cols, rows):
 
                 # если недостаточно высокая, то попробуем объеденить с ячейками выше
                 k = j
-                H = 0
+                H = 0 # c_h
+                # print(f"k==j: {k}")
                 while k < len(rows) and not field[rows[k]][cols[i]]:
                     # считаем размеры текущей клетки
                     c_h, c_w = get_cell(cols, rows, i, k, len(field), len(field[0]))
@@ -427,6 +447,7 @@ def append_to_field(rect : Rect, field, cols, rows):
                 W = c_w
                 # проверяем все в выбранном диапазоне rows
                 while l < len(cols) and not any(field[rows[t]][cols[l]] for t in range(j, min(k+1, len(rows)))):
+                    # c_h, c_w = cells[(cols[l], rows[j])]
                     c_h, c_w = get_cell(cols, rows, l, j, len(field), len(field[0]))
 
                     # может ли получиться так, что c_h < h - думаю нет
@@ -437,11 +458,13 @@ def append_to_field(rect : Rect, field, cols, rows):
 
                 if l == len(cols):
                     W = len(field[0]) - cols[i]
+                # print(f"W: {W}, w: {w}")
                 if W < w:
                     continue
 
                 # собрали клетки нормального размера
                 # можно на их место добавлять прямойгольник
+                # print(f"Вставляем {rect} в ({cols[i]}, {rows[j]})")
                 if (cols[i] + w) not in cols and (cols[i] + w) < len(field[0]):
                     cols.append(cols[i] + w)
                     cols.sort()
@@ -450,7 +473,9 @@ def append_to_field(rect : Rect, field, cols, rows):
                     rows.sort()
 
                 # забиваем поле True
+                # print(rows[j], h, cols[i], w)
                 for ind in range(rows[j], rows[j]+h):
+                    # print(ind, end = '')
                     field[ind][cols[i]:cols[i]+w] = list(map(lambda x: True, range(cols[i],cols[i]+w)))
 
                 rect.move((cols[i], rows[j]))
@@ -458,6 +483,111 @@ def append_to_field(rect : Rect, field, cols, rows):
 
     return None, True
 
+def rotate_matrix( m , dir = "CW"):
+    if dir == "CW":
+        return [[m[j][i] for j in range(len(m))] for i in range(len(m[0])-1,-1,-1)]
+    else:
+        return [[m[j][i] for j in range(len(m))] for i in range(len(m[0])-1,-1,-1)]
+
+def turn_field(field, cols, rows, rect, direction="CW"):
+    new_field : list
+    new_cols : list
+    new_rows : list
+    new_rect : Rect
+    if direction == "CW":
+        new_field = rotate_matrix(field, "CW")
+        new_rows, new_cols = cols, list(map(lambda x: len(field)-x, rows))[::-1]
+        new_rect = Rect(rect.r)
+        coord = rect.get_coord_list()[:2]
+        c = coord
+        h, w = rect.getSize()
+        coord[1], coord[0] = coord[0], len(field)-(coord[1]+h)
+        new_rect.setSize((w, h))
+        new_rect.setCoords(coord)
+    else:
+        pass
+
+    return new_field, new_cols, new_rows, new_rect
+
+def empty_area(field, c1 : tuple, c2 : tuple):
+    for i in range(c1[0], c2[0]):
+        for j in range(c1[1], c2[1]):
+            if field[i][j]:
+                return False
+    return True
+
+def append_to_field(rect : Rect, field, cols, rows, gravity=0):
+    '''
+        ищет место для вставки в поле и если находит - вставляет
+    '''
+    for i in range(gravity%4):
+        field, cols, rows, _ = turn_field(field, cols, rows, rect, "CW")
+
+    H_, W_ = len(field), len(field[0])
+    h, w = rect.getSize()
+
+    # print(cols, rows)
+    for i in range(len(cols)-1):
+        for j in range(len(rows)-1):
+            # если клетка cell не занята
+            # проверка на случай, если у нас граница прямоугольника наложилась на 
+            if cols[i] < W_ and rows[j] < H_ and not field[rows[j]][cols[i]]: # empty_area(field, (rows[j], cols[i]), (rows[j+1]-1, cols[i+1]-1)): # (field[rows[j]][cols[i]] or field[rows[j+1]-1][cols[i]] or field[rows[j]][cols[i+1]-1] or field[rows[j+1]-1][cols[i+1]-1]):
+                # если недостаточно высокая, то попробуем объеденить с ячейками выше
+                k = j
+                H = 0
+                while k < len(rows)-1 and not field[rows[k]][cols[i]]:
+                    # считаем размеры текущей клетки
+                    c_h, c_w = get_cell(cols, rows, i, k, H_, W_)
+                    # может ли получиться так, что c_h < h - думаю нет
+                    H += c_h
+                    if H >= h:
+                        break
+                    k += 1
+                
+                if k == len(rows)-1:
+                    H = H_ - rows[j]
+
+                # если не получилось собрать высоту
+                if H < h:
+                    continue
+
+                # если ячейка нормальной высоты
+                # собираем ширину
+                l = i
+                W = 0
+                # проверяем все в выбранном диапазоне rows
+                while l < len(cols)-1 and not any(field[rows[t]][cols[l]] for t in range(j, min(k+1, len(rows)-1))):
+                    c_h, c_w = get_cell(cols, rows, l, j, H_, W_)
+                    W += c_w
+                    if W >= w:
+                        break
+                    l += 1
+
+                if l == len(cols)-1:
+                    W = W_ - cols[i]
+                if W < w:
+                    continue
+
+                # собрали клетки нормального размера
+                # # можно на их место добавлять прямойгольник
+                if (cols[i] + w) not in cols and (cols[i] + w) < W_:
+                    bisect.insort(cols, cols[i] + w)
+                if (rows[j] + h) not in rows and (rows[j] + h) < H_:
+                    bisect.insort(rows, rows[j] + h)
+
+
+                # забиваем поле True
+                for ind in range(rows[j], rows[j]+h):
+                    field[ind][cols[i]:cols[i]+w] = list(map(lambda x: True, range(cols[i],cols[i]+w)))
+
+                rect.move((cols[i], rows[j]))
+
+                if gravity % 4:
+                    for i in range(4-(gravity % 4)):
+                        field, cols, rows, rect = turn_field(field, cols, rows, rect, "CW")
+                return rect, cols, rows, field, False
+
+    return None, None, None, field, True
 
 def printField(field):
     for line in field:
@@ -496,30 +626,33 @@ def generateSizes(r : float, H, W):
 def tryCombo(rs, size_combo, H, W, algo="classic"):
     field = [[False for _ in range(W)] for _ in range(H)]
     rects = []
-    cols = [0]
-    rows = [0]
-    # print(len(rs), len(size_combo))
+    cols = [0, W]
+    rows = [0, H]
     for i in range(len(size_combo)):
         rect = Rect(rs[i])
         rect.setSize((max(size_combo[i]), min(size_combo[i])))
         rects.append(rect)
 
-    rects.sort(key=(lambda x: x.height()), reverse=True)
 
     if algo == "classic":
+        rects.sort(key=(lambda x: x.height()), reverse=True)
+
         for i in range(len(rects)):
             err = True
             rect = rects[i]
-            # rect.setSize((max(rect.getSize()), min(rect.getSize())))
-            rr, err = append_to_field(rect, field, cols, rows)
+            rr, c, r, f, err = append_to_field(rect, field.copy(), cols.copy(), rows.copy(), gravity=(i%2)*2)
             if err:
                 rect.turn()
-                rr, err = append_to_field(rect, field, cols, rows)
-            rects[i] = rr
-            # print(rect)
+                rr, c, r, f, err = append_to_field(rect, field, cols, rows, gravity=(i%2)*2)
 
             if err == True:
                 return None, True
+            
+            rects[i] = rr
+            field = f
+            cols = c
+            rows = r
+
     elif algo == "burke":
         rects, err = burke(rects, H, W)
         if err == True:
@@ -536,9 +669,11 @@ def tryCombo(rs, size_combo, H, W, algo="classic"):
         for i in range(len(rr)):
             if abs(r - rr[i].r) < 0.09 or abs(r - 1/rr[i].r) < 0.09:
                 line += rr[i].get_coord_list()
-                # print(rects[i])
+                # print(rr[i], line[-4:])
                 rr.pop(i)
                 break
+
+    # visualize_placements(line, Rect(1.), (W, H), range(1, 4))
 
     # print("line:", line)
     # если не все прямоугольники получилось распределить
@@ -588,7 +723,7 @@ def findOpt(rs, sizes, size_combo, H, W, selfS):
                 best_combo_positions = positions
                 minS = S
 
-        if i > 1:
+        if i > 2:
             return best_combo_positions, minS, False
         # else:
         #     continue
@@ -645,6 +780,7 @@ def solveCase(case) -> np.array:
 
         if S > Smax:
             position = unshuffle(pos, sh_r, copy.deepcopy(order))
+            # position = pos
             Smax = S
 
         assert err == False
@@ -656,100 +792,20 @@ def solution(task) -> np.array:
     data_frame = []
 
     for case in task:
-        # print(case)
         positions = solveCase(case)
         data_frame.append(positions)
-        # break
-        continue
-
-        H, W = int(case[0]), int(case[1])
-        field = [[False for _ in range(W)] for _ in range(H)]
-        columns = [Column(0, W)]
-        rows = [Row(0, H)]
-
-        cols = [0]
-        rows = [0]
-
-        cells = {(0, 0) : (H, W)}
-
-        rects = []
-        for r in case[2:]:
-            print(f"r: {r}")
-            rects.append(Rect(r))
-            size = chose_min_rect_size(rects[-1])
-            rects[-1].setSize(size)
-            print(rects[-1])
         
-        rects.sort(reverse=False)
-
-        # r in rects - r копия из списка - не влияет на список
-        for i in range(len(rects)):
-            rect = rects[i]
-            # size = chose_rect_size(rect, field, cols, rows)
-            # assert size is not None
-            # rect.setSize(size)
-            print(rect)
-
-            # пытаемся добавить максимального размера
-            rect, err = append_to_field(rect, field, cols, rows, cells)
-            if err:
-                rect.turn()
-                rect, err = append_to_field(rect, field, cols, rows, cells)
-
-            # если не получилось - пробуем с минимальным размером
-            if err == False:
-                rects[i] = rect
-            else:
-                rects[i], err = append_to_field(rects[i], field, cols, rows, cells)
-                if err:
-                    rects[i].turn()
-                    rects[i], err = append_to_field(rects[i], field, cols, rows, cells)
-            
-            assert err == False
-
-            printField(field)
-        
-        line = []
-        print(case[2:])
-        for r in case[2:]:
-            for i in range(len(rects)):
-                if abs(r - rects[i].r) < 0.09 or abs(r - 1/rects[i].r) < 0.09:
-                    print(rects[i], r)
-                    line += rects[i].get_coord_list()
-                    rects.pop(i)
-                    break
-
-        if len(rects) != 0:
-            print("!!! there is some bad rect !!!")
-            for rect in rects:
-                print(rect)
-            raise "dfddf"
-        data_frame.append(line)
-
-    # print(data_frame)
     return data_frame
 
 def main():
-    '''sys.argv[1]'''
     task = np.genfromtxt(sys.argv[1] , delimiter=",", skip_header=1)[:2,:]
-    # print(task)
 
-
-    start_time = time.time()
+    # @benchmark
     sol = solution(task)
-    delta_t = (time.time() - start_time)
-    m = int(delta_t)//60
-    s = int(delta_t)%60
-    ms = int(1000*(delta_t-m*60-s))
-    print(f"{m}:{s}:{ms}")
 
     sol = np.asarray(sol, dtype=str)
-    # print(sol)
-
     header = (', '.join([f'X{i+1}min, Y{i+1}min, X{i+1}max, Y{i+1}max' for i in range(len(sol[0]) // 4)])).split(', ')
-    # print(header)
     sol = np.insert(sol, 0, np.asarray(header, dtype=str), axis=0)
-    # print(sol)
     np.savetxt("solution.csv", sol, delimiter=",", fmt="%s")
 
 
