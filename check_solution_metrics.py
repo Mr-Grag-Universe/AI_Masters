@@ -2,6 +2,8 @@ import sys
 import numpy as np
 
 def check_solution(task, solution):
+    if task.shape[0] != solution.shape[0]:
+        print(task.shape[0], solution.shape[0])
     assert task.shape[0] == solution.shape[0]
     assert 4 * (task.shape[1] - 2) == solution.shape[1]
     answers = []
@@ -53,7 +55,7 @@ def check_solution(task, solution):
                 assert ~intersect
     return answers
 
-task = np.genfromtxt(sys.argv[1], delimiter=",", skip_header=1)[:10,:]
+task = np.genfromtxt(sys.argv[1], delimiter=",", skip_header=1) #[:10,:]
 solution = np.genfromtxt(sys.argv[2], delimiter=",", skip_header=1)
 
 a = check_solution(task, solution)
