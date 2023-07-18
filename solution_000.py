@@ -1,5 +1,5 @@
 import numpy as np
-import scipy as sp
+# import scipy as sp
 import sys
 from fractions import Fraction
 from math import gcd
@@ -9,8 +9,6 @@ from collections import defaultdict, deque
 import time
 import copy
 import bisect
-import itertools
-# from tqdm import tqdm
 
 def benchmark(func):
     import time
@@ -27,8 +25,6 @@ def benchmark(func):
         return x
     return wrapper
 
-def wrapped_func(*args, **kwargs):
-    return benchmark(solveCaseFullRand)(*args, **kwargs)
 '''
 def visualize_placements(position, max_rectangles, container, order_res):
     def __convert(position):
@@ -96,23 +92,6 @@ def visualize_placements(position, max_rectangles, container, order_res):
 
     можно попробовать вариации алгоритма на тему не сляпывать фигуры, а наоборот разносить
     или ставить так, чтобы оставлять как можно больше свободного места
-
-    долбаное проклятие размерности!!!
-    пришлось переделывать. сейчас у меня всё решает великий рандом - отсеиваем минимум признаков
-
-    оказалось, что полный рандом - довольно эффективная стратегия
-
-    подводя итоги - по выдимому я выбрал неверную стратегию, разделяя подбор комбинации размеров и их размещение.
-    путём подгона и теста разных алгоритмов вставки/упаковки за разумное время (сильно ограниченное подбором/перебором размеров)
-    получить меньше 600 очков я не смог
-    по видимому надо было думать над каким нибудь генетическим алгоритмом или ещё что-то комбинированное, 
-    но я уже не успею это придумать и реализовать
-
-    посмотрел на википеции и по репозиториям гитхаба решения (не знаю, почему сразу так не сделал).
-    глаза на лоб лезут. там задачи все со статическими размерами, но мне страшно. люди пишут НИРы по этим темам
-    ну и задачка...
-
-    финальный сабмит. решил оставить немного коментариев
 '''
 
 
@@ -142,7 +121,7 @@ class Rect():
         # print(f"moved to c1: {self.c1}, c2: {self.c2}")
 
     def __eq__(self, other):
-        return abs(self.r - other.r) < 0.09 or abs(self.r - 1/other.r) < 0.09
+        return self.r == other.r
     
     def __ne__(self, other):
         return self.r != other.r
@@ -162,8 +141,8 @@ class Rect():
     def get_coord_list(self) -> list:
         return [self.c1['x'], self.c1['y'], self.c2['x']-1, self.c2['y']-1]
 
-    def setSize(self, h_w_size):
-        self.c2 = {'x' : (self.c1['x'] + h_w_size[1]), 'y' : (self.c1['y'] + h_w_size[0])}
+    def setSize(self, size):
+        self.c2 = {'x' : (self.c1['x'] + size[0]), 'y' : (self.c1['y'] + size[1])}
 
     def turn(self):
         self.c2['x'], self.c2['y'] = self.c1['x'] - self.c1['y'] + self.c2['y'], self.c1['y'] - self.c1['x'] + self.c2['x']
@@ -188,11 +167,6 @@ class Rect():
         
         intersect = (dx > 0) & (dy > 0)
         return not (~intersect)
-
-    def moveToOrigin(self):
-        h, w = self.getSize()
-        self.c1 = {'x': 0, 'y': 0}
-        self.c2 = {'x': w, 'y': h}
 
 
 class Level():
@@ -273,7 +247,7 @@ def get_cell(cols, rows, i, j, H, W):
 
     return c_h, c_w
 
-# старый перепечатанный вариант - не разбирал
+
 def burke(rects, H, W):
     gap = []
     unpacked = copy.deepcopy(rects)
@@ -339,123 +313,6 @@ def burke(rects, H, W):
         
     return packed, False
 
-# актуальный вариант - писал сам с нуля
-def packBurke(rects_ : list, fieldSize):
-    '''
-        по сути играем в тетрис
-    '''
-    rects = copy.deepcopy(rects_)
-    for i in range(len(rects)):
-        rects[i].moveToOrigin()
-        # print(rects[i])
-
-    positions = []
-    real_indexes = []
-
-    H, W = fieldSize
-    hs, ws = zip(*[rect.getSize() for rect in rects])
-    sorted_sides = sorted(list(enumerate(hs)) + list(enumerate(ws)), key=lambda x: x[1])
-    ss = list(map(lambda x : x[1], sorted_sides))
-
-    if sorted_sides[-1][1] > max(W, H):
-        return None, None, True
-
-    heights = [0 for _ in range(W)]
-    while sorted_sides:
-        # print(heights)
-        # пока так. потом можно будет соптимизировать
-        # heights_zip = sorted(heights)
-        height, ind = heights[0], 0
-        for i, h in enumerate(heights):
-            if h < height:
-                ind = i
-                height = h
-        h = 0
-        # для выбранной высоты пытаемся вставить
-
-        i = ind
-        while i < W and heights[i] <= height:
-            i += 1
-        
-        j = ind
-        while j > -1 and heights[j] <= height:
-            j -= 1
-
-        space = i-j-1
-
-        # мы нашли границы свободного пространства
-
-        r_ind = bisect.bisect_left(ss, space)
-        if r_ind < len(ss) and r_ind>0 and ss[r_ind] > space:
-            r_ind = bisect.bisect_left(ss, ss[r_ind-1])
-
-        # включительно
-        l_bound, r_bound = (0, 0)
-        pos = None
-        real_ind = None
-        if r_ind == 0 and sorted_sides[0][1] > space:
-            # у нас нет достаточно узкого прямоугольника
-            l_bound, r_bound = (j+1, i-1)
-            
-            r_b_height, l_b_height = None, None
-            if i >= W:
-                r_b_height, l_b_height = heights[j], heights[j]
-            elif j < 0:
-                l_b_height, r_b_height = heights[i], heights[i]
-            else:
-                l_b_height, r_b_height = heights[j], heights[i]
-                
-
-            new_h = min(l_b_height, r_b_height)
-            
-            h = new_h-height
-        else:
-            if r_ind == len(sorted_sides):
-                r_ind = len(sorted_sides)-1
-            
-            r_b_height, l_b_height = (0, 0)
-            if i < W:
-                r_b_height = heights[i]
-            if j > -1:
-                l_b_height = heights[j]
-            
-            real_ind, width = sorted_sides[r_ind]
-
-            # манипуляции с массивами прямоугольников
-            h_, w = rects[real_ind].getSize()
-            if w != width:
-                rects[real_ind].setSize((w, h_))
-                w, h_ = h_, w
-            sorted_sides.pop(r_ind)
-            ss.pop(r_ind)
-
-            # ищем и удаляем другую сторону
-            x = bisect.bisect_left(ss, h_)
-            while sorted_sides[x][0] != real_ind:
-                x += 1
-            sorted_sides.pop(x)
-            ss.pop(x)
-
-            if r_b_height > l_b_height:
-                # индекс для заливки
-                l_bound = j+1
-                r_bound = j+width
-                pos = (j+1, height)
-            else:
-                # индекс для заливки
-                r_bound = i-1
-                l_bound = i-width
-                pos = (i-width, height)
-            h = h_
-
-        heights[l_bound: r_bound+1] = [height+h for _ in range(l_bound, r_bound+1)]
-        if pos:
-            positions.append(pos)
-            real_indexes.append(real_ind)
-            rects[real_ind].move(pos)
-
-    positions = [positions[ind] for ind in real_indexes]
-    return rects, positions, False
 
 def check_packed(packed, H, W) -> bool:
     '''
@@ -539,7 +396,6 @@ def FCNR(rects : list, H, W) -> list :
 
 def append_to_field(rect : Rect, field, cols, rows, H_, W_):
     '''
-        классическая вставка
         ищет место для вставки в поле и если находит - вставляет
     '''
     # H_, W_ = len(field), len(field[0])
@@ -631,41 +487,6 @@ def append_to_field(rect : Rect, field, cols, rows, H_, W_):
 
     return None, True
 
-def convert_to_clasic(pos, rects, fieldSize=(100, 100)):
-    '''
-        конвертируем результат поля бёрка для работы классического алгоритма
-    '''
-    H, W = fieldSize
-    field = set([(H, 0), (0, W), (H, W)])
-    rects = []
-    cols = set([0, W])
-    rows = set([0, H])
-
-    for rect in rects:
-        c1, c2 = rect.c1, rect.c2
-        x1, y1, x2, y2 = c1['x'], c1['y'], c2['x'], c2['y']
-        cols.add(x1)
-        cols.add(x2)
-        rows.add(y1)
-        rows.add(y2)
-
-    rows = sorted(list(rows))
-    cols = sorted(list(cols))
-
-    for rect in rects:
-        c1, c2 = rect.c1, rect.c2
-        x1, y1, x2, y2 = c1['x'], c1['y'], c2['x'], c2['y']
-        i1 = bisect.bisect_left(rows, x1)
-        i2 = bisect.bisect_left(rows, x2)
-        j1 = bisect.bisect_left(cols, y1)
-        j2 = bisect.bisect_left(cols, y2)
-
-        field = field.union(itertools.product(rows[i1:i2], cols[j1:j2]))
-    field = field.union(itertools.product(rows, [0 for _ in range(H)]))
-    field = field.union(itertools.product(cols, [0 for _ in range(W)]))
-
-    return field, cols, rows
-
 
 def printField(field):
     for line in field:
@@ -709,7 +530,6 @@ def tryCombo(rs, size_combo, H, W, algo="classic"):
     rows = [0, H]
     # print(len(rs), len(size_combo))
     for i, combo in enumerate(size_combo):
-        # print(combo)
         rect = Rect(rs[i])
         rect.setSize(combo)
         rects.append(rect)
@@ -721,7 +541,6 @@ def tryCombo(rs, size_combo, H, W, algo="classic"):
         for i in range(len(rects)):
             err = True
             rect = rects[i]
-            # print(rect)
             # rect.setSize((max(rect.getSize()), min(rect.getSize())))
             rr, err = append_to_field(rect, field, cols, rows, H, W)
             # if err == False:
@@ -737,33 +556,9 @@ def tryCombo(rs, size_combo, H, W, algo="classic"):
                 return None, True
         # print(cols, rows)
     elif algo == "burke":
-        '''
-            пихаем бёрком как получится, а потом невпихнутое довпихиваем классикой
-            работает дольше классики, качество +- то же, если не хуже
-        '''
-
-        rects1, positions, err = packBurke(rects, (H, W))
+        rects, err = burke(rects, H, W)
         if err == True:
             return None, True
-        
-        bad_rects = list(filter(lambda rect : rect.c2['y'] > H, rects1))
-        good_rects = list(filter(lambda rect : rect.c2['y'] <= H, rects1))
-        field, cols, rows = convert_to_clasic(positions, good_rects, (H, W))
-
-        for i, rect in enumerate(bad_rects):
-            err = True
-            rect = bad_rects[i]
-            rr, err = append_to_field(rect, field, cols, rows, H, W)
-            if err:
-                rect.turn()
-                rr, err = append_to_field(rect, field, cols, rows, H, W)
-            bad_rects[i] = rr
-
-            if err == True:
-                return None, True
-
-        rects = good_rects + bad_rects
-            
     elif algo == "FCNR":
         rects, err = FCNR(rects, H, W)
         if err == True:
@@ -771,25 +566,23 @@ def tryCombo(rs, size_combo, H, W, algo="classic"):
 
     line = []
     placements = []
+    # d = defaultdict(deque)
+    # for r in rr:
+    #     if r.r < 1:
+    #         r.r = 1/r.r
+    #     r_ = round(int(r.r*100) / 100, 1)
+    #     d[r_].append(r.get_coord_list())
+    # for r in rs:
+    #     line += d[int(r*10) / 10].pop()
 
-    # rects_r = [max(rect.r, 1/rect.r) for rect in rects]
-    # бин поиск не сильно ускорил дело
     for r in rs:
-        # print(rs, rects_r)
         for i, rect in enumerate(rects):
             if abs(r - rect.r) < 0.09 or abs(r - 1/rect.r) < 0.09:
                 line += rect.get_coord_list()
                 rects.pop(i)
                 break
-        # i = bisect.bisect_left(rects_r, r)
-        # if i == len(rects):
-        #     i -= 1
-        # line += rects[i].get_coord_list()
-        # rects.pop(i)
-        # rects_r.pop(i)
 
-
-
+    # print("line:", line)
     # если не все прямоугольники получилось распределить
     if len(rects) != 0:
         print("!!! there is some bad rect !!!")
@@ -798,23 +591,6 @@ def tryCombo(rs, size_combo, H, W, algo="classic"):
         raise "rect determination problem"
     
     return line, False
-
-# тестил бинпоиск, но он не дал прирост производительности, ибо слишком мало элементов
-def bisect_right(arr, x, key=None):
-    if key is None:
-        key = lambda value: value
-    
-    lo = 0
-    hi = len(arr)
-    
-    while lo < hi:
-        mid = (lo + hi) // 2
-        if key(arr[mid]) > x:
-            hi = mid
-        else:
-            lo = mid + 1
-    
-    return lo
 
 
 def findOpt(rs, sizes, size_combo, H, W, selfS):
@@ -836,40 +612,6 @@ def findOpt(rs, sizes, size_combo, H, W, selfS):
     minS = 0
     i = 0
     # print(sizes[0])
-    
-    '''
-    lo = 0
-    hi = len(sizes[0])
-    
-    while lo < hi:
-        mid = (lo + hi) // 2
-        # print(mid, lo, hi)
-        if sizes[0][mid][0]*sizes[0][mid][1] > H*W-selfS:
-            hi = mid
-            continue
-
-        size_combo.append(sizes[0][mid])
-        # print(size_combo)
-        positions, S, err = findOpt(rs, sizes[1:], size_combo, H, W, selfS+size_combo[-1][0]*size_combo[-1][1])
-        size_combo.pop(-1)
-
-        if err == False:
-            hi = mid
-        else:
-            lo = mid + 1
-
-    if lo == 0:
-        # print(sizes[0])
-        return None, None, True
-
-    # lo - нужный индекс
-    size_combo.append(sizes[0][lo-1])
-    # print("nice combo: ", size_combo)
-    best_combo_positions, minS, err = findOpt(rs, sizes[1:], size_combo, H, W, selfS+size_combo[-1][0]*size_combo[-1][1])
-    size_combo.pop(-1)
-    '''
-
-    
     for ind, size in enumerate(sizes[0]):
         # если мы берём слишком большой размер - даже не пробуем подставлять
         if size[0]*size[1] > H*W-selfS:
@@ -888,46 +630,11 @@ def findOpt(rs, sizes, size_combo, H, W, selfS):
                 best_combo_positions = positions
                 minS = S
 
-        if i > 1:
+        if i > 3:
             return best_combo_positions, minS, False
         # else:
         #     continue
     
-
-    if best_combo_positions:
-        return best_combo_positions, minS, False
-    else:
-        return None, None, True
-
-# пробовать несколько выриантов - слишком дорого и не выгодно. возвращаем первый подошедший
-def findOptFullRand(rs, sizes, size_combo, H, W, selfS):
-    if sizes == []:
-        positions, err = tryCombo(rs, size_combo, H, W, algo="classic")
-        if err == False:
-            return positions, selfS, err
-        else:
-            return None, None, err
-
-    # можно добавить бин поиск
-    best_combo_positions = None
-    minS = 0
-    
-    for ind, size in enumerate(sizes[0]):
-        # если мы берём слишком большой размер - даже не пробуем подставлять
-        if size[0]*size[1] > H*W-selfS:
-            continue
-
-        size_combo.append(size)
-        positions, S, err = findOptFullRand(rs, sizes[1:], size_combo, H, W, selfS+size_combo[-1][0]*size_combo[-1][1])
-        size_combo.pop(-1)
-        # нужно добавить сравниние площадей
-        if err == False:
-            # i += 1
-            if S > minS:
-                best_combo_positions = positions
-                minS = S
-                return best_combo_positions, minS, False
-
     if best_combo_positions:
         return best_combo_positions, minS, False
     else:
@@ -940,16 +647,16 @@ def unshuffle(pos, sh_r, order):
         O(n), где n - количество прямоугольников
     '''
     undone_pos = pos.copy()
-    for i, s in enumerate(sh_r):
-        ind = order[s][-1]
-        order[s].pop(-1)
+    for i in range(len(sh_r)):
+        r = sh_r[i]
+        ind = order[r][-1]
+        order[r].pop(-1)
         undone_pos[ind*4 : (ind+1)*4] = pos[i*4 : (i+1)*4]
 
     return undone_pos
 
 @benchmark
 def solveCase(case) -> np.array:
-    print(case)
     H, W = int(case[0]), int(case[1])
     cols = [0]
     rows = [0]
@@ -969,11 +676,10 @@ def solveCase(case) -> np.array:
         order[r_sizes[i][0]].append(i)
     
     seed(0)
-    for _ in range(1): 
-        print("try: ")
+    for _ in range(3): 
         sh_r_sizes = r_sizes.copy()
         shuffle(sh_r_sizes)
-        sh_r_sizes.sort(key = (lambda x: x[0]))
+        # sh_r_sizes.sort(key = (lambda x: x[0]))
         sh_r = [r for r, _ in sh_r_sizes]
         sh_sizes = [sizes for _, sizes in sh_r_sizes]
 
@@ -990,195 +696,22 @@ def solveCase(case) -> np.array:
     # visualize_placements(position, Rect(1.), (W, H), range(5))
     return position
 
-import random
-# @benchmark
-def solveCaseRand(case) -> np.array:
-    # print(case)
-    H, W = int(case[0]), int(case[1])
-    rs = case[2:]
-
-    # генерируем все возможные размеры для rects
-    sizes = []
-    for r in rs:
-        sizes.append(generateSizes(r, H, W))
-    
-
-    SM = 0
-    P = []
-
-    Smax = 0
-    position = None
-    seed(42)
-    for _ in range(30):
-        rand_sizes = [random.sample(line[:max(1, (len(line)*9)//10)], max(1, (len(line)*1)//10)) + line[(len(line)*9)//10:] for line in sizes]
-            
-        r_sizes = list(zip(rs, rand_sizes))
-        order = defaultdict(list)
-        for i in range(len(r_sizes)):
-            order[r_sizes[i][0]].append(i)
-        
-        for _ in range(1):
-            sh_r_sizes = r_sizes.copy()
-            shuffle(sh_r_sizes)
-            sh_r_sizes.sort(key = (lambda x: x[0]))
-            sh_r = [r for r, _ in sh_r_sizes]
-            sh_sizes = [sizes for _, sizes in sh_r_sizes]
-
-            size_combo = []
-            # print("find Opt")
-            pos, S, err = findOpt(sh_r, sh_sizes, size_combo, H, W, 0)
-
-            if not err and S > Smax:
-                position = unshuffle(pos, sh_r, copy.deepcopy(order))
-                Smax = S
-
-    return position
-
-
-# использую это - всё пологается на рандомный выбор набора размеров
-def solveCaseFullRand(case) -> np.array:
-    # print(case)
-    H, W = int(case[0]), int(case[1])
-    rs = case[2:]
-
-    # генерируем все возможные размеры для rects
-    sizes = []
-    for r in rs:
-        sizes.append(generateSizes(r, H, W))
-
-    Smax = 0
-    position = None
-    seed(42)
-    x1 = [(line[:max(1, (len(line)*8)//10)], 1) for line in sizes]
-    x2 = [[line[-1]] for line in sizes]
-    # print(x1, x2)
-    for _ in range(350):
-        # делаем рандомное подмножество, не забывая про минимум, чтоб точно нашлось решение
-        rand_sizes = [random.sample(x1[0], x1[1]) + x2 for x1, x2 in zip(x1, x2)]
-
-        for _ in range(2):
-            sh_r_sizes = list(zip(rs, rand_sizes))
-            order = defaultdict(list)
-            for i, s in enumerate(sh_r_sizes):
-                order[s[0]].append(i)
-            
-            # sh_r_sizes = r_sizes.copy()
-
-            # пробуем 2 варианта : перемешку и сортированный
-            if i % 2 == 0:
-                shuffle(sh_r_sizes)
-            elif i % 2 == 1:
-                # sh_r_sizes.sort()
-                sh_r_sizes.sort(key = (lambda x: x[0]))
-
-            sh_r = [r for r, _ in sh_r_sizes]
-            sh_sizes = [sizes for _, sizes in sh_r_sizes]
-
-            pos, S, err = findOptFullRand(sh_r, sh_sizes, [], H, W, 0)
-
-            if not err and S > Smax:
-                position = unshuffle(pos, sh_r, copy.deepcopy(order))
-                Smax = S
-            if err:
-                raise "error"
-
-    return position
-
-def funcSciPy(A, *args):
-    ss = args[0]
-    rs = args[1]
-    # print(A, args)
-    A, fieldSize = A[:-2], A[-2:]
-    H, W = fieldSize
-
-    rs =    A[ : len(A) // 2]
-    sizes = A[len(A) // 2 : ]
-
-    sizes = list(map(lambda x : ss[x[0]][bisect.bisect_left(ss[x[0]], round(x[1]))] , enumerate(sizes)))
-    sizes = [(size, round(size/r)) for r, size in zip(rs, sizes)]
-
-    # print(rs, sizes, (H, W))
-
-    pos, err = tryCombo(rs, sizes, H, W, algo='classic') # findOptFullRand(rs, sizes, [], H, W, 0)
-    if err:
-        return 0
-    pos = np.asarray(pos, dtype=int).reshape(len(pos)//4, 4)
-    S = sum([(coord[2]-coord[2])*(coord[3]-coord[1]+1) for coord in pos])
-    # print(S)
-    return H*W-S
-
-def solveCaseSciPy(case):
-    # print(case)
-    H, W = int(case[0]), int(case[1])
-    rs = case[2:]
-
-    # генерируем все возможные размеры для rects
-    sizes = []
-    for r in rs:
-        sizes.append(generateSizes(r, H, W))
-        for i, size in enumerate(sizes[-1]):
-            if size[0] < size[1]:
-                size[0], size[1] = size[1], size[0]
-
-            sizes[-1][i] = size
-        sizes[-1].sort()
-
-    Smax = 0
-    position = None
-    seed(42)
-
-
-    grid = [
-    ]
-    for r in rs:
-        grid.append([r, r])
-    for line in sizes:
-        grid.append([line[-1][0], line[0][0]])
-    grid += [[H, H], [W, W]]
-
-    # for line in grid:
-    #     print(line)
-    ss = [sorted([s[0] for s in line]) for line in sizes]
-    print("ss: ", ss)
-    # print(sp.optimize.rosen)
-    res = sp.optimize.differential_evolution(func=funcSciPy, bounds=grid, args=(ss, rs, ), strategy="best2bin")
-    print(res)
-    sizes = res.x[len(rs) : -2]
-    sizes = list(map(lambda x : ss[x[0]][bisect.bisect_left(ss[x[0]], round(x[1]))] , enumerate(sizes)))
-    sizes = [(size, round(size/r)) for r, size in zip(rs, sizes)]
-    print("sizes:", sizes)
-
-    # pos, S, err = findOptFullRand(rs, sizes, [], H, W, 0)
-    pos, err = tryCombo(rs, sizes, H, W, algo='classic')
-    print(pos)
-    return pos
-
 
 def solution(task) -> np.array:
     data_frame = []
 
-    # немного параллелизма в студию ))
-    with multiprocessing.Pool(2) as pool:
-        data_frame = pool.map(wrapped_func, task)
-
-    # for case in task:
-    #     positions = solveCaseSciPy(case) # solveCaseRand(case)
-    #     data_frame.append(positions)
-    
-    return np.asarray(data_frame, dtype=int)
-
-
-import multiprocessing
+    for case in task:
+        positions = solveCase(case)
+        data_frame.append(positions)
+    return data_frame
 
 def main():
     '''sys.argv[1]'''
-    # для теста производительности на task2
-    # task = np.concatenate((np.genfromtxt(sys.argv[1] , delimiter=",", skip_header=1)[:,:], np.genfromtxt(sys.argv[1] , delimiter=",", skip_header=1)[:,2:]), axis=1)
-    task = np.genfromtxt(sys.argv[1] , delimiter=",", skip_header=1)
-    print(task.shape)
+    task = np.genfromtxt(sys.argv[1] , delimiter=",", skip_header=1)[:, :]
+    # print(task)
+
 
     start_time = time.time()
-
     sol = solution(task)
     delta_t = (time.time() - start_time)
     m = int(delta_t)//60
@@ -1195,5 +728,5 @@ def main():
     # print(sol)
     np.savetxt("solution.csv", sol, delimiter=",", fmt="%s")
 
-if __name__ == '__main__':
-    main()
+
+main()

@@ -55,7 +55,7 @@ def check_solution(task, solution):
                 assert ~intersect
     return answers
 
-task = np.genfromtxt(sys.argv[1], delimiter=",", skip_header=1) #[:10,:]
+task = np.genfromtxt(sys.argv[1], delimiter=",", skip_header=1) # [:10,:]
 solution = np.genfromtxt(sys.argv[2], delimiter=",", skip_header=1)
 
 a = check_solution(task, solution)
